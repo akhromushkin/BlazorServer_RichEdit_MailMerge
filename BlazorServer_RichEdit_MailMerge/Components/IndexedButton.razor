@@ -1,0 +1,13 @@
+﻿<button class="btn btn-primary" @onclick="OnClick">Download</button>
+
+@code {
+    [Parameter]
+    public Recipient Index { get; set; }
+
+    [Parameter]
+    public Action<int> ClickCallback { get; set; }
+
+    void OnClick() {
+        //ClickCallback.Invoke(Index);
+    }
+}
