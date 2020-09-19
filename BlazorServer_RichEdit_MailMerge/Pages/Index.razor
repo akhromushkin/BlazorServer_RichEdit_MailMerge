@@ -30,7 +30,7 @@
 
                 <DxFormLayoutItem>
                     <Template>
-                        <DxButton Click="SendEmails" Text="@sendEmailsButtonText" Enabled="@sendEmailsButtonEnabled" />
+                        <DxButton Click="SendEmails" Text="Send e-mails" />
                     </Template>
                 </DxFormLayoutItem>
             </DxFormLayout>
@@ -58,9 +58,6 @@
     SampleData dataSource;
     Sender selectedSender;
 
-    string sendEmailsButtonText = "Send e-mails";
-    bool sendEmailsButtonEnabled = true;
-
     Sender SelectedSender {
         get => selectedSender;
         set { selectedSender = value; InvokeAsync(StateHasChanged); }
@@ -74,14 +71,7 @@
         return base.OnInitializedAsync();
     }
 
-    void UpdateSendEmailsButton(string text, bool enabled) {
-        sendEmailsButtonText = text;
-        sendEmailsButtonEnabled = enabled;
-        InvokeAsync(StateHasChanged);
-    }
-
-    async void SendEmails(MouseEventArgs mouseEventArgs) {
-        UpdateSendEmailsButton("E-mails sending...", false);
+    void SendEmails(MouseEventArgs mouseEventArgs) {
         List<Recipient> recipientList = dataSource.RecipientList;
 
         for (int i = 0; i < recipientList.Count; i++) {
@@ -90,7 +80,6 @@
                 SendEmail(message);
             }
         }
-        UpdateSendEmailsButton("Send e-mails", true);
     }
 
     void DownloadPdf(Recipient recipient) {
