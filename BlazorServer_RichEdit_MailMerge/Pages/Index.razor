@@ -1,9 +1,8 @@
 ﻿@page "/"
 @using System.IO
-@using System.Net
-@using System.Net.Mail
-@using System.Net.Mime
 @using DevExpress.XtraRichEdit
+@using MimeKit;
+@using MailKit.Net.Smtp
 
 @inject IJSRuntime JS
 
@@ -19,7 +18,7 @@
                         <p>
                             This example uses the <a href=" https://www.devexpress.com/products/net/office-file-api/">RichEdit Document API</a>
                             to generate a e-mails by template. Specify sender, click  <b>"Send e-mails"</b> for sending e-mails for all recipients
-                            or <b>"Download"</b> for download attachment for specify recipient. @dataSource.RecipientList[6].ContactName
+                            or <b>"Download"</b> for download attachment for specify recipient.
                         </p>
                     </Template>
                 </DxFormLayoutItem>
@@ -31,7 +30,7 @@
 
                 <DxFormLayoutItem>
                     <Template>
-                        <DxButton Click="SendEmails" Text="Send e-mails" />
+                        <DxButton Click="SendEmails" Text="@sendEmailsButtonText" Enabled="@sendEmailsButtonEnabled" />
                     </Template>
                 </DxFormLayoutItem>
             </DxFormLayout>
@@ -59,6 +58,9 @@
     SampleData dataSource;
     Sender selectedSender;
 
+    string sendEmailsButtonText = "Send e-mails";
+    bool sendEmailsButtonEnabled = true;
+
     Sender SelectedSender {
         get => selectedSender;
         set { selectedSender = value; InvokeAsync(StateHasChanged); }
@@ -72,28 +74,32 @@
         return base.OnInitializedAsync();
     }
 
-    void SendEmails(MouseEventArgs mouseEventArgs) {
+    void UpdateSendEmailsButton(string text, bool enabled) {
+        sendEmailsButtonText = text;
+        sendEmailsButtonEnabled = enabled;
+        InvokeAsync(StateHasChanged);
+    }
+
+    async void SendEmails(MouseEventArgs mouseEventArgs) {
+        UpdateSendEmailsButton("E-mails sending...", false);
         List<Recipient> recipientList = dataSource.RecipientList;
 
         for (int i = 0; i < recipientList.Count; i++) {
-            using (MemoryStream stream = CreateAttachment(recipientList[i])) {
-                ContentType contentType = new ContentType(MediaTypeNames.Application.Pdf);
-                Attachment attachment = new Attachment(stream, contentType);
-                attachment.ContentDisposition.FileName = "attachment.pdf";
-
-                MailMessage message = CreateMessage("YOUR_MAIL", recipientList[i].Email, attachment);
-                SendEmail(message);
+            using (MemoryStream attachmentStream = CreateAttachmentStream(recipientList[i])) {
+                MimeMessage message = CreateMessage("<YOUR_MAIL>", recipientList[i], attachmentStream);
+                await SendEmail(message);
             }
         }
+        UpdateSendEmailsButton("Send e-mails", true);
     }
 
     void DownloadPdf(Recipient recipient) {
-        using (MemoryStream stream = CreateAttachment(recipient)) {
+        using (MemoryStream stream = CreateAttachmentStream(recipient)) {
             JS.InvokeVoidAsync("exportToPdf", "output.pdf", Convert.ToBase64String(stream.ToArray()));
         }
     }
 
-    MemoryStream CreateAttachment(Recipient recipient) {
+    MemoryStream CreateAttachmentStream(Recipient recipient) {
         using (RichEditDocumentServer resultDocumentServer = new RichEditDocumentServer()) {
             MemoryStream stream = new MemoryStream();
             documentServer.Options.MailMerge.DataSource = dataSource.GetDataSource(selectedSender, recipient);
@@ -105,28 +111,47 @@
         }
     }
 
-    MailMessage CreateMessage(string from, string to, Attachment attachment = null) {
-        MailMessage message = new MailMessage(from, to);
-        if (attachment != null)
-            message.Attachments.Add(attachment);
-        message.Subject = "Using the new SMTP client.";
-        message.Body = @"Using this new feature, you can send an email message from an application very easily.";
+    MimeMessage CreateMessage(string from, Recipient recipient, MemoryStream attachmentStream = null) {
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress(SelectedSender.FullName, from));
+        message.To.Add(new MailboxAddress(recipient.ContactName, recipient.Email));
+        message.Subject = "Some subject";
+
+        var body = new TextPart() {
+            Text = @"Some text body"
+        };
+
+        var attachment = new MimePart("application", "pdf") {
+            Content = new MimeContent(attachmentStream, ContentEncoding.Default),
+            ContentDisposition = new ContentDisposition(ContentDisposition.Attachment),
+            ContentTransferEncoding = ContentEncoding.Base64,
+            FileName = "attachment.pdf"
+        };
+
+        var multipart = new Multipart("mixed");
+        multipart.Add(body);
+        multipart.Add(attachment);
+
+        message.Body = multipart;
+
         return message;
     }
 
-    void SendEmail(MailMessage message) {
-        using (SmtpClient client = new SmtpClient("SMTP_SERVER")) {
-            client.Port = 25; // 25, 465, 587 or 2525
-            client.Credentials = new NetworkCredential("USERNAME", "PASSWORD");
-            client.EnableSsl = true;
+    async Task SendEmail(MimeMessage message) {
+        using (var client = new SmtpClient()) {
+            client.Connect("<SMTP_SERVER>", 587, false); // port is 25, 465, 587 or 2525
+
+            // Note: only needed if the SMTP server requires authentication
+            await client.AuthenticateAsync("<USERNAME>", "<PASSWORD>");
+
             try {
-                client.SendAsync(message, null);
+                await client.SendAsync(message);
             }
             catch (Exception e) {
             }
-            // Credentials are necessary if the server requires the client
-            // to authenticate before it will send email on the client's behalf.
-            //client.UseDefaultCredentials = true;
+            finally {
+                await client.DisconnectAsync(true);
+            }
         }
     }
 }
