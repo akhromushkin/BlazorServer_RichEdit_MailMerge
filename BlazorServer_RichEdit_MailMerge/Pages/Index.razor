@@ -87,7 +87,7 @@
         for (int i = 0; i < recipientList.Count; i++) {
             using (MemoryStream attachmentStream = CreateAttachmentStream(recipientList[i])) {
                 MimeMessage message = CreateMessage("<YOUR_MAIL>", recipientList[i], attachmentStream);
-                await SendEmail(message);
+                SendEmail(message);
             }
         }
         UpdateSendEmailsButton("Send e-mails", true);
@@ -137,20 +137,20 @@
         return message;
     }
 
-    async Task SendEmail(MimeMessage message) {
+    void SendEmail(MimeMessage message) {
         using (var client = new SmtpClient()) {
             client.Connect("<SMTP_SERVER>", 587, false); // port is 25, 465, 587 or 2525
 
             // Note: only needed if the SMTP server requires authentication
-            await client.AuthenticateAsync("<USERNAME>", "<PASSWORD>");
+            client.Authenticate("<USERNAME>", "<PASSWORD>");
 
             try {
-                await client.SendAsync(message);
+                client.Send(message);
             }
             catch (Exception e) {
             }
             finally {
-                await client.DisconnectAsync(true);
+                client.Disconnect(true);
             }
         }
     }
